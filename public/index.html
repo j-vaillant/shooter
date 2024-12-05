@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jeu Multijoueur</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      #leaderboard {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 10px;
+        font-family: Arial, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="leaderboard">
+      <h3>Leaderboard</h3>
+      <p>Chargement...</p>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+      const socket = io(); // Connexion WebSocket avec le serveur
+
+      let enemy = null; // Définir la variable enemy ici
+
+      // Afficher un prompt pour entrer le nom du joueur
+      window.onload = () => {
+        const name = window.prompt("Entrez votre nom :");
+        if (name) {
+          socket.emit("set_name", name); // Envoyer le nom au serveur
+        }
+      };
+
+      // Réception du message de demande de taille de fenêtre
+      socket.on("request_window_size", () => {
+        // Une fois le nom défini, on envoie la taille de la fenêtre
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // Afficher la taille de la fenêtre dans la console pour debug
+        console.log(`Envoi de la taille de la fenêtre : ${width}x${height}`);
+
+        // Émettre l'événement `window_size` au serveur avec la taille de la fenêtre
+        socket.emit("window_size", width, height);
+      });
+
+      // Réception de l'ennemi pour l'afficher
+      socket.on("enemy_spawned", (newEnemy) => {
+        // Mettre à jour la variable enemy avec les données reçues
+        enemy = newEnemy;
+
+        console.log("Ennemi spawné :", enemy);
+
+        // Exemple d'affichage dans un canvas
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth; // Ajuster la taille du canvas à la fenêtre
+        canvas.height = window.innerHeight;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // Effacer le canvas
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "red";
+        ctx.fill();
+      });
+
+      // Écouteur pour l'événement 'enemy_destroyed' côté client
+      socket.on("enemy_destroyed", (enemyId) => {
+        if (enemy && enemy.id === enemyId) {
+          console.log("L'ennemi a été détruit.");
+          enemy = null; // Réinitialiser l'ennemi
+          const canvas = document.getElementById("gameCanvas");
+          const ctx = canvas.getContext("2d");
+          ctx.clearRect(0, 0, canvas.width, canvas.height); // Effacer l'ennemi du canvas
+        }
+      });
+
+      // Gérer le clic sur l'ennemi (envoi de l'ID de l'ennemi)
+      document
+        .getElementById("gameCanvas")
+        .addEventListener("click", (event) => {
+          const canvas = document.getElementById("gameCanvas");
+          const ctx = canvas.getContext("2d");
+          const x = event.clientX;
+          const y = event.clientY;
+
+          // Vérifier si le clic est dans le cercle (l'ennemi)
+          if (
+            enemy &&
+            Math.sqrt(Math.pow(x - enemy.x, 2) + Math.pow(y - enemy.y, 2)) <=
+              enemy.radius
+          ) {
+            console.log("Ennemi cliqué !");
+            socket.emit("enemy_clicked", enemy); // Envoyer l'événement au serveur
+          }
+        });
+
+      // Réception du leaderboard
+      socket.on("update_leaderboard", (players, scores) => {
+        const leaderboard = document.getElementById("leaderboard");
+        leaderboard.innerHTML = "<h3>Leaderboard</h3>";
+        for (const id in players) {
+          leaderboard.innerHTML += `<p>${players[id]}: ${scores[id]}</p>`;
+        }
+      });
+    </script>
+  </body>
+</html>
